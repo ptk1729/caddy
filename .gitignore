@@ -5,12 +5,13 @@ Caddyfile.*
 !caddyfile/
 !caddyfile.go
 
+.artifacts/
 # artifacts from pprof tooling
 *.prof
 *.test
 
 # build artifacts and helpers
-cmd/caddy/caddy
+cmd/caddy/caddy*
 cmd/caddy/caddy.exe
 cmd/caddy/tmp/*.exe
 cmd/caddy/.env
