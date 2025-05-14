@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # lint:
+  #   name: Lint Check
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v4
+
+  #     - name: Install golangci-lint
+  #       run: |
+  #         curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
+  #           | sh -s -- -b $(go env GOPATH)/bin v1.58.1
+
+  #     - name: Run golangci-lint
+  #       run: |
+  #         set +e
+  #         $(go env GOPATH)/bin/golangci-lint run ./... > lint_output.txt
+  #         exit_code=$?
+  #         if [ "$exit_code" -ne 0 ]; then
+  #           echo "### golangci-lint output:" >> $GITHUB_STEP_SUMMARY
+  #           cat lint_output.txt >> $GITHUB_STEP_SUMMARY
+  #           echo "⚠️ Linter found issues, but job will not fail."
+  #         fi
+
+  verify-signatures:
+    name: Commit Signature Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify commits
+        run: |
+          set -e
+          UNVERIFIED=$(git log --pretty=format:'%h %G? %an' origin/master..HEAD | grep -vE '^[a-f0-9]{7} G ')
+          if [ -n "$UNVERIFIED" ]; then
+            echo "🚨 Unverified commits found:"
+            echo "$UNVERIFIED"
+            exit 1
+          fi
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Build
+        run: |
+          go build -o caddy ./cmd/caddy
+
+  # sbom:
+  #   name: Generate SBOM
+  #   runs-on: ubuntu-latest
+  #   needs: build
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v4
+
+  #     - name: Set up Go
+  #       uses: actions/setup-go@v5
+  #       with:
+  #         go-version: '1.21'
+
+  #     - name: Rebuild binary (for SBOM context)
+  #       run: go build -o caddy ./cmd/caddy
+
+  #     - name: Install Syft
+  #       run: |
+  #         curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+  #     - name: Generate SBOM
+  #       run: |
+  #         syft caddy -o spdx-json > sbom.json
+
+  #     - name: Upload SBOM artifact
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: sbom
+  #         path: sbom.json
+
+  # osv-scan:
+  #   name: Scan with OSV
+  #   runs-on: ubuntu-latest
+  #   needs: sbom
+  #   steps:
+  #     - name: Download SBOM
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: sbom
+
+  #     - name: Install OSV Scanner
+  #       run: |
+  #         curl -sSfL https://github.com/google/osv-scanner/releases/download/v1.6.2/osv-scanner_1.6.2_linux_amd64.tar.gz \
+  #           | tar -xz -C /usr/local/bin
+
+  #     - name: Run OSV Scanner
+  #       run: |
+  #         ./osv-scanner --sbom=sbom.json --format=table > osv_results.txt || true
+  #         echo "### OSV Scanner Report:" >> $GITHUB_STEP_SUMMARY
+  #         cat osv_results.txt >> $GITHUB_STEP_SUMMARY
+
+  #     - name: Upload OSV Scanner results (optional)
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: osv-scan-results
+  #         path: osv_results.txt
